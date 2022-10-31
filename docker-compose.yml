@@ -1,0 +1,58 @@
+version: '3'
+
+volumes:
+  postgres_data:
+    driver: local
+
+services:
+
+  traefik:
+    image: "traefik:v2.9"
+    container_name: "traefik"
+    command:
+      - "--api.insecure=false"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+    ports:
+      - "80:80"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+    networks:
+      - inoa-network
+
+  postgres_db:
+    image: postgres:15.0-alpine3.16
+    restart: unless-stopped
+    container_name: "postgres_db"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=qwerty
+      - POSTGRES_DB=Inoa
+    labels:
+      - traefik.enable=false
+    networks:
+      - inoa-network
+
+  inoa_python_app:
+    container_name: "inoa_python_app"
+    image: juancamargo/inoa_python_app:latest
+    restart: unless-stopped
+    build:
+      context: ./inoa_python_app
+      dockerfile: Dockerfile
+    depends_on:
+      - postgres_db
+    networks:
+      - inoa-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.inoa_python_app.rule=Host(`devops.localhost`)"
+      - "traefik.http.routers.inoa_python_app.entrypoints=web"
+
+networks:
+  inoa-network:
